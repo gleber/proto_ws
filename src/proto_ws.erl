@@ -44,7 +44,57 @@
 -include("../include/misultin.hrl").
 
 
+-record(wstate, {vsn,
+                 vsnmod,
+
+                 path,
+                 origin,
+                 host,
+                 
+                 socket_mode,
+                 force_ssl,
+                 
+                 headers,
+                 inited = false,
+
+                 buffer = <<>>}).
+
+
 %% ============================ \/ API ======================================================================
+
+-spec init(WsVersions::[websocket_version()],
+           Path::string(),
+           Origin::string(),
+           Host::string(),
+           SocketMode::socket_mode(),
+           ForceSsl::boolean(),
+           Headers::http_headers()) -> {error, atom()} | {ok, State::#wstate()}.
+init(WsVersions, Path, Origin, Host, SocketMode, ForceSsl, Headers) ->
+    case check_websockets(WsVersions, Headers) of
+        false ->
+            {error, ws_not_found};
+        {true, Vsn, VsnMod} ->
+            State = #wstate{vsn = Vsn,
+                            vsnmod = VsnMod,
+                            headers = Headers,
+                            path = Path,
+                            origin = Origin,
+                            host = Host,
+                            socket_mode = SocketMode,
+                            force_ssl = ForceSsl},
+            State2 = VsnMod:handshake(State),
+            {ok, State2}
+    end.
+
+format_send(Data, #wstate{vsnmod = VsnMod} = State) ->
+    VsnMod:format_send(Data).
+
+handle_data(CB, Acc0, Data, #wstate{inited = false, VsnMod = VsnMod} = State) ->
+    VsnMod:handshake_continue(CB, Acc0, Data, State);
+handle_data(CB, Acc0, Data, #wstate{inited = false, VsnMod = VsnMod} = State) ->
+    VsnMod:handle_data(CB, Acc0, Data, State);
+    
+
 
 %% Check if the incoming request is a websocket handshake.
 -spec check(WsVersions::[websocket_version()], Path::string(), Headers::http_headers()) -> false | {true, Vsn::websocket_version()}.
@@ -147,7 +197,7 @@ check_websockets([Vsn|T], Headers) ->
     VsnMod = get_module_name_from_vsn(Vsn),
     case VsnMod:check_websocket(Headers) of
         false -> check_websockets(T, Headers);
-        true -> {true, Vsn}
+        true -> {true, Vsn, VsnMod}
     end.
 
 %% enter loop
@@ -222,13 +272,13 @@ handle_data_receive(WsHandleLoopPid, Data, #ws{vsn = Vsn, socket = Socket, socke
     WsCallback = fun(D, _) -> send_to_browser(WsHandleLoopPid, D) end,
     case VsnMod:handle_data(Data, State, {Socket, SocketMode}, [], WsCallback) of
         {_, websocket_close} ->
-            proto_ws:websocket_close(Socket, WsHandleLoopPid, SocketMode, WsAutoExit);        
+            proto_ws:websocket_close(Socket, WsHandleLoopPid, SocketMode, WsAutoExit);
         {_, websocket_close, CloseData} ->
             misultin_socket:send(Socket, CloseData, SocketMode),
             proto_ws:websocket_close(Socket, WsHandleLoopPid, SocketMode, WsAutoExit);
         {_, continue, SendData, NewState} ->
             misultin_socket:send(Socket, SendData, SocketMode),
-            ws_loop(WsHandleLoopPid, Ws, NewState)
+            ws_loop(WsHandleLoopPid, Ws, NewState);
         {_, continue, NewState} ->
             ws_loop(WsHandleLoopPid, Ws, NewState)
     end.

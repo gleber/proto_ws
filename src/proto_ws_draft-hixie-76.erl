@@ -73,57 +73,61 @@ required_headers() ->
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
 -spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
-handshake(#req{socket = Sock, socket_mode = SocketMode, ws_force_ssl = WsForceSsl}, Headers, {Path, Origin, Host}) ->
-    %% build data
+handshake(State) ->
+    {ok, State#wstate{inited = false}}.
+
+handshake_continue(CB, Acc0, Data,
+                   #wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
     Key1 = misultin_utility:header_get_value('Sec-WebSocket-Key1', Headers),
     Key2 = misultin_utility:header_get_value('Sec-WebSocket-Key2', Headers),
-    %% handshake needs body of the request, still need to read it [TODO: default recv timeout hard set, will be exported when WS protocol is final]
-    misultin_socket:setopts(Sock, [{packet, raw}, {active, false}], SocketMode),
-    Body = case misultin_socket:recv(Sock, 8, 30*1000, SocketMode) of
-               {ok, Bin} -> Bin;
-               {error, timeout} ->
-                   ?LOG_WARNING("timeout in reading websocket body", []),
-                   <<>>;
-               _Other ->
-                   ?LOG_ERROR("tcp error treating data: ~p", [_Other]),
-                   <<>>
-           end,
-    ?LOG_DEBUG("got content in body of websocket request: ~p", [Body]),
-    %% prepare handhsake response
-    WsMode = case SocketMode of
-                 ssl -> "wss";
-                 http when WsForceSsl =:= true  -> "wss"; % behind stunnel or similar, client is using ssl
-                 http when WsForceSsl =:= false -> "ws"
-             end,
-    %% build challenge
-    Ikey1 = [D || D <- Key1, $0 =< D, D =< $9],
-    Ikey2 = [D || D <- Key2, $0 =< D, D =< $9],
-    Blank1 = length([D || D <- Key1, D =:= 32]),
-    Blank2 = length([D || D <- Key2, D =:= 32]),
-    Part1 = erlang:list_to_integer(Ikey1) div Blank1,
-    Part2 = erlang:list_to_integer(Ikey2) div Blank2,
-    Ckey = <<Part1:4/big-unsigned-integer-unit:8, Part2:4/big-unsigned-integer-unit:8, Body/binary>>,
-    Challenge = erlang:md5(Ckey),
-    %% format
-    ["HTTP/1.1 101 WebSocket Protocol Handshake\r\n",
-     "Upgrade: WebSocket\r\n",
-     "Connection: Upgrade\r\n",
-     "Sec-WebSocket-Origin: ", Origin, "\r\n",
-     "Sec-WebSocket-Location: ", WsMode, "://", lists:concat([Host, Path]), "\r\n\r\n",
-     Challenge
-    ].
+    case <<Buffer/binary, Data/binary>> of
+        <<Body:64, Rest/binary>> ->
+            WsMode = case SocketMode of
+                         ssl -> "wss";
+                         http when WsForceSsl =:= true  -> "wss"; % behind stunnel or similar, client is using ssl
+                         http when WsForceSsl =:= false -> "ws"
+                     end,
+            %% build challenge
+            Ikey1 = [D || D <- Key1, $0 =< D, D =< $9],
+            Ikey2 = [D || D <- Key2, $0 =< D, D =< $9],
+            Blank1 = length([D || D <- Key1, D =:= 32]),
+            Blank2 = length([D || D <- Key2, D =:= 32]),
+            Part1 = erlang:list_to_integer(Ikey1) div Blank1,
+            Part2 = erlang:list_to_integer(Ikey2) div Blank2,
+            Ckey = <<Part1:4/big-unsigned-integer-unit:8, Part2:4/big-unsigned-integer-unit:8, Body/binary>>,
+            Challenge = erlang:md5(Ckey),
+            %% format
+            Response = ["HTTP/1.1 101 WebSocket Protocol Handshake\r\n",
+                        "Upgrade: WebSocket\r\n",
+                        "Connection: Upgrade\r\n",
+                        "Sec-WebSocket-Origin: ", Origin, "\r\n",
+                        "Sec-WebSocket-Location: ", WsMode, "://", lists:concat([Host, Path]), "\r\n\r\n",
+                        Challenge
+                       ],
+            case Rest of
+                <<>> ->
+                    {Acc0, continue, Response, State#wstate{buffer = Rest, inited = true}};
+                _ ->
+                    handle_data(CB, Acc0, Rest, State#wstate{buffer = <<>>, inited = true})
+            end;
+        Buffer2 ->
+            {Acc0, continue, Response, State#wstate{buffer = Buffer2, inited = false}}
+    end.    
 
 %% ----------------------------------------------------------------------------------------------------------
 %% Function: -> {Acc1, websocket_close | {Acc1, websocket_close, DataToSendBeforeClose::binary() | iolist()} | {Acc1, continue, NewState}
 %% Description: Callback to handle incomed data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handle_data(Data::binary(),
+-spec handle_data(WsCallback::fun(),
+                  Data::binary(),
                   State::websocket_state() | term(),
                   {Socket::socket(), SocketMode::socketmode()},
-                  term(),
-                  WsCallback::fun()) ->
+                  term()
+                  ) ->
                          {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, websocket_state()}.
-handle_data(Data, undefined, {Socket, SocketMode}, Acc0, WsCallback) ->
+handle_data(CB, Acc0, Data,
+            #wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
+handle_data(Data, CB, Acc) ->
     handle_data(Data, {buffer, none}, {Socket, SocketMode}, Acc0, WsCallback);
 handle_data(Data, {buffer, B} = _State, {Socket, SocketMode}, Acc0, WsCallback) ->
     i_handle_data(Data, B, {Socket, SocketMode}, Acc0, WsCallback).
