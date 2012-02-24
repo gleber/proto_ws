@@ -1,0 +1,20 @@
+{application, proto_ws,
+ [
+  {description, "Websockets protocol parsers"},
+  {vsn, "0.9-dev"},
+  {modules, [
+             misultin_http,
+             misultin_req,
+             misultin_utility,
+             proto_ws,
+             'proto_ws_draft-hixie-68',
+             'proto_ws_draft-hixie-76',
+             'proto_ws_draft-hybi-10_17',
+             'proto_ws_draft-hybi-10',
+             'proto_ws_draft-hybi-17',
+             misultin_ws
+            ]},
+  {registered, []},
+  {env, []},
+  {applications, [kernel, stdlib]}
+ ]}.
