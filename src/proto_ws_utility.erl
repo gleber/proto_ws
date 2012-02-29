@@ -31,7 +31,9 @@
 -vsn("0.9-dev").
 
 %% API
--export([get_http_status_code/2, get_http_status_message/1, get_content_type/1, get_key_value/2, header_get_value/2]).
+-export([get_http_status_code/2, get_http_status_message/1, get_content_type/1, get_key_value/2, 
+
+         header_get_value/2, headers_normalize/1]).
 -export([parse_qs/1, parse_qs/2, unquote/1, quote_plus/1, get_peer/2]).
 -export([convert_ip_to_list/1]).
 -export([hexstr/1, get_unix_timestamp/0, get_unix_timestamp/1]).
@@ -431,6 +433,14 @@ header_get_value(Tag, Headers) when is_atom(Tag) ->
             end;
         {_, Value} -> Value
     end.
+
+-spec headers_normalize(Headers::[{http_header(), iolist()}]) -> [{list(), list()}].
+headers_normalize(Headers) ->
+    lists:map(fun({K, V}) when is_atom(K) ->
+                      {string:to_lower(atom_to_list(K)), binary_to_list(iolist_to_binary(V))};
+                 ({K, V}) ->
+                      {string:to_lower(binary_to_list(iolist_to_binary(K))), binary_to_list(iolist_to_binary(V))}
+              end, Headers).
 
 %%  @spec parse_qs(string() | binary()) -> [{Key, Value}]
 %%  @doc Parse a query string or application/x-www-form-urlencoded.
