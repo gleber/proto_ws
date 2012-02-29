@@ -35,7 +35,9 @@
 -vsn("0.9-dev").
 
 %% API
--export([init/5, handle_data/4, format_send/2]).
+-export([init/2, init/4, init/5, handle_data/4, format_send/2,
+
+         supported_versions/0]).
 
 -include("../include/proto_ws.hrl").
 
@@ -44,24 +46,44 @@
                              Acc::term(),
                              Data::binary(),
                              State::wstate()) ->
-    {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+    {term(), 'websocket_close'} |
+    {term(), 'websocket_close', binary()} |
+    {term(), 'continue', wstate()}  |
+    {term(), 'continue', binary(), wstate()}.
 -callback handle_data(WsCallback::fun(),
                       Acc::term(),
                       Data::binary(),
                       State::wstate()) ->
-    {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+    {term(), 'websocket_close'} |
+    {term(), 'websocket_close', binary()} |
+    {term(), 'continue', wstate()}  |
+    {term(), 'continue', binary(), wstate()}.
 -callback format_send(Data::iolist(), State::term()) -> binary().
 
 %% behaviour
 %% -export([behaviour_info/1]).
 
 %% ============================ \/ API ======================================================================
+-spec supported_versions() -> [atom()].
+supported_versions() ->
+    ['draft-hybi-17', 'draft-hybi-10', 'draft-hixie-76', 'draft-hixie-68'].
 
+-spec init(Path::string(),
+           Headers::http_headers()) -> {error, atom()} | {ok, State::#wstate{}} | {ok, Response::binary, State::#wstate{}}.
+-spec init(Path::string(),
+           SocketMode::socketmode(),
+           ForceSsl::boolean(),
+           Headers::http_headers()) -> {error, atom()} | {ok, State::#wstate{}} | {ok, Response::binary, State::#wstate{}}.
 -spec init(WsVersions::[websocket_version()],
            Path::string(),
            SocketMode::socketmode(),
            ForceSsl::boolean(),
-           Headers::http_headers()) -> {error, atom()} | {ok, State::#wstate{}}.
+           Headers::http_headers()) -> {error, atom()} | {ok, State::#wstate{}} | {ok, Response::binary, State::#wstate{}}.
+
+init(Path, Headers) ->
+    init(proto_ws:supported_versions(), Path, http, false, Headers).
+init(Path, SocketMode, ForceSsl, Headers) ->
+    init(proto_ws:supported_versions(), Path, SocketMode, ForceSsl, Headers).
 init(WsVersions, Path, SocketMode, ForceSsl, Headers) ->
     case check_websockets(WsVersions, Headers) of
         false ->
@@ -77,12 +99,27 @@ init(WsVersions, Path, SocketMode, ForceSsl, Headers) ->
                             host = Host,
                             socket_mode = SocketMode,
                             force_ssl = ForceSsl},
-            VsnMod:handshake(State)
+            case VsnMod:handshake(State) of
+                {ok, State2} ->
+                    {ok, State2};
+                {ok, <<>>, State2} ->
+                    {ok, State2};
+                {ok, Res, State2} ->
+                    {ok, Res, State2}
+            end
     end.
 
 format_send(Data, #wstate{vsnmod = VsnMod} = _State) ->
     VsnMod:format_send(Data).
 
+-spec handle_data(WsCallback::fun(),
+                  Acc::term(),
+                  Data::binary(),
+                  State::wstate()) ->
+                         {term(), 'websocket_close'} |
+                         {term(), 'websocket_close', binary()} |
+                         {term(), 'continue', wstate()}  |
+                         {term(), 'continue', binary(), wstate()}.
 handle_data(CB, Acc0, Data, #wstate{inited = false, vsnmod = VsnMod} = State) ->
     VsnMod:handshake_continue(CB, Acc0, Data, State);
 handle_data(CB, Acc0, Data, #wstate{inited = true, vsnmod = VsnMod} = State) ->

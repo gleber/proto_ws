@@ -5,7 +5,7 @@
 %%
 %% Copyright (C) 2011, Richard Jones <rj@metabrew.com>, Roberto Ostinelli <roberto@ostinelli.net>,
 %%                     portions of code from Andy W. Song <https://github.com/awsong/erl_websocket>
-%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -67,7 +67,7 @@
 %% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handshake(wstate()) -> {'ok', binary(), wstate()}.
+-spec handshake(wstate()) -> {'ok', wstate()} | {'ok', binary(), wstate()}.
 handshake(#wstate{headers = Headers} = State) ->
     %% build data
     Key = list_to_binary(proto_ws_utility:header_get_value('Sec-WebSocket-Key', Headers)),
@@ -83,10 +83,13 @@ handshake(#wstate{headers = Headers} = State) ->
 %% Description: Callback to finalize handshake.
 %% ----------------------------------------------------------------------------------------------------------
 -spec handshake_continue(WsCallback::fun(),
-                         Acc0::term(),
+                         Acc::term(),
                          Data::binary(),
                          State::wstate()) ->
-                                {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
+                                {term(), 'websocket_close'} |
+                                {term(), 'websocket_close', binary()} |
+                                {term(), 'continue', wstate()}  |
+                                {term(), 'continue', binary(), wstate()}.
 handshake_continue(_CB, _Acc0, _Data, _State) ->
     erlang:error(should_not_happen).
 
@@ -94,10 +97,13 @@ handshake_continue(_CB, _Acc0, _Data, _State) ->
 %% Description: Callback to handle incomed data.
 %% ----------------------------------------------------------------------------------------------------------
 -spec handle_data(WsCallback::fun(),
-                  Acc0::term(),
+                  Acc::term(),
                   Data::binary(),
                   State::wstate()) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
+                         {term(), 'websocket_close'} |
+                         {term(), 'websocket_close', binary()} |
+                         {term(), 'continue', wstate()}  |
+                         {term(), 'continue', binary(), wstate()}.
 handle_data(WsCallback, Acc0, Data,
             #wstate{buffer = Buffer} = State) ->
     i_handle_data(State#wstate{buffer = <<Buffer/binary, Data/binary>>},  Acc0, WsCallback).

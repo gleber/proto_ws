@@ -4,7 +4,7 @@
 %% >-|-|-(°>
 %%
 %% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>.
-%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -55,7 +55,7 @@ required_headers() ->
 %% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handshake(#wstate{}) -> {'ok', iolist(), #wstate{}}.
+-spec handshake(wstate()) -> {'ok', wstate()} | {'ok', binary(), wstate()}.
 handshake(State) ->
     ?HYBI_COMMON:handshake(State).
 
@@ -66,7 +66,10 @@ handshake(State) ->
                          Acc::term(),
                          Data::binary(),
                          State::wstate()) ->
-                                {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+                                {term(), 'websocket_close'} |
+                                {term(), 'websocket_close', binary()} |
+                                {term(), 'continue', wstate()}  |
+                                {term(), 'continue', binary(), wstate()}.
 handshake_continue(WsCallback, Acc0, Data, State) ->
     ?HYBI_COMMON:handshake_continue(WsCallback, Acc0, Data, State).
 
@@ -77,7 +80,10 @@ handshake_continue(WsCallback, Acc0, Data, State) ->
                   Acc::term(),
                   Data::binary(),
                   State::wstate()) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+                         {term(), 'websocket_close'} |
+                         {term(), 'websocket_close', binary()} |
+                         {term(), 'continue', wstate()}  |
+                         {term(), 'continue', binary(), wstate()}.
 handle_data(WsCallback, Acc0, Data, State) ->
     ?HYBI_COMMON:handle_data(WsCallback, Acc0, Data, State).
 
