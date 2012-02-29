@@ -22,6 +22,4 @@ Copyright (c) 2012 Livepress Inc. Based on work by:
 * Bob Ippolito <bob@mochimedia.com> for Mochi Media, Inc.
 * and other contributors of Misultin
 
-This library is distributed under BSD license, as was Misultin.
-
-
+This library is distributed under BSD license, as is Misultin.

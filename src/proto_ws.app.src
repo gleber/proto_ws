@@ -5,7 +5,7 @@
   {modules, [
              misultin_http,
              misultin_req,
-             misultin_utility,
+             proto_ws_utility,
              proto_ws,
              'proto_ws_draft-hixie-68',
              'proto_ws_draft-hixie-76',

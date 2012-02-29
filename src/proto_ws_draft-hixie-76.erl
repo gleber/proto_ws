@@ -35,32 +35,11 @@
 -vsn("0.9-dev").
 
 %% API
--export([check_websocket/1, handshake/3, handle_data/5, format_send/2]).
+-export([handshake/1, handshake_continue/4, handle_data/4, format_send/2]).
 
 -export([required_headers/0]).
 
-%% includes
--include("../include/misultin.hrl").
-
-
 %% ============================ \/ API ======================================================================
-
-%% ----------------------------------------------------------------------------------------------------------
-%% Function: -> true | false
-%% Description: Callback to check if the incoming request is a websocket request according to this protocol.
-%% ----------------------------------------------------------------------------------------------------------
--spec check_websocket(Headers::http_headers()) -> boolean().
-check_websocket(Headers) ->
-    %% set required headers
-    %% check for headers existance
-    case proto_ws:check_headers(Headers, required_headers()) of
-        true ->
-            %% return
-            true;
-        _RemainingHeaders ->
-            ?LOG_DEBUG("not this protocol, remaining headers: ~p", [_RemainingHeaders]),
-            false
-    end.
 
 required_headers() ->
     [
@@ -74,12 +53,12 @@ required_headers() ->
 %% ----------------------------------------------------------------------------------------------------------
 -spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
 handshake(State) ->
-    {ok, State#wstate{inited = false}}.
+    {ok, <<>>, State#wstate{inited = false}}.
 
 handshake_continue(CB, Acc0, Data,
                    #wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
-    Key1 = misultin_utility:header_get_value('Sec-WebSocket-Key1', Headers),
-    Key2 = misultin_utility:header_get_value('Sec-WebSocket-Key2', Headers),
+    Key1 = proto_ws_utility:header_get_value('Sec-WebSocket-Key1', Headers),
+    Key2 = proto_ws_utility:header_get_value('Sec-WebSocket-Key2', Headers),
     case <<Buffer/binary, Data/binary>> of
         <<Body:64, Rest/binary>> ->
             WsMode = case SocketMode of
@@ -124,13 +103,15 @@ handshake_continue(CB, Acc0, Data,
                   {Socket::socket(), SocketMode::socketmode()},
                   term()
                   ) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, websocket_state()}.
+                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, Buffer, websocket_state()}.
 handle_data(CB, Acc0, Data,
-            #wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
-handle_data(Data, CB, Acc) ->
-    handle_data(Data, {buffer, none}, {Socket, SocketMode}, Acc0, WsCallback);
-handle_data(Data, {buffer, B} = _State, {Socket, SocketMode}, Acc0, WsCallback) ->
-    i_handle_data(Data, B, {Socket, SocketMode}, Acc0, WsCallback).
+            #wstate{headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
+    case i_handle_data(<<Buffer/binary, Data/binary>>, <<>>, CB, Acc0) of
+        {Acc, continue, Buffer2} ->
+            {Acc, continue, State#state{buffer = Buffer2}};
+        {Acc, websocket_close, SendData} ->
+            {Acc, websocket_close, SendData, State#state{buffer = <<>>}}
+    end.
 
 %% ----------------------------------------------------------------------------------------------------------
 %% Function: -> binary() | iolist()
@@ -146,26 +127,26 @@ format_send(Data, _State) ->
 %% ============================ \/ INTERNAL FUNCTIONS =======================================================
 
 %% Buffering and data handling
--spec i_handle_data( Data::binary(),
-                     Buffer::binary() | none,
-                     {Socket::socket(), SocketMode::socketmode()},
-                     Acc::term(),
-                     WsCallback::pid()) -> {term(), websocket_close} | {term(), continue, term()}.
-i_handle_data(<<0, T/binary>>, none, {Socket, SocketMode}, Acc, WsCallback) ->
-    i_handle_data(T, <<>>, {Socket, SocketMode}, Acc, WsCallback);
-i_handle_data(<<>>, none, {_Socket, _SocketMode}, Acc, _WsCallback) ->
-    %% return status
-    {Acc, continue, {buffer, none}};
-i_handle_data(<<255, 0>>, _L, {Socket, SocketMode}, Acc, _WsCallback) ->
-    ?LOG_DEBUG("websocket close message received from client, closing websocket with pid ~p", [self()]),
-    %% return command
+-spec i_handle_data(Data::binary(),
+                    Buffer::binary(),
+                    Acc::term(),
+                    WsCallback::pid()) ->
+                           {term(), websocket_close, SendData::binary()} |
+                           {term(), continue, NewBuffer::binary()}.
+
+i_handle_data(<<255, 0>>, <<>>, Acc, _WsCallback) ->
     {Acc, websocket_close, <<255, 0>>};
-i_handle_data(<<255, T/binary>>, L, {Socket, SocketMode}, Acc, WsCallback) ->
+
+i_handle_data(<<0, T/binary>>, <<>>, Acc, WsCallback) ->
+    i_handle_data(T, <<>>, Acc, WsCallback);
+
+i_handle_data(<<>>, R, Acc, _WsCallback) ->
+    {Acc, continue, R};
+
+i_handle_data(<<255, T/binary>>, L, Acc, WsCallback) ->
     Acc2 = WsCallback(L, Acc),
-    i_handle_data(T, none, {Socket, SocketMode}, Acc2, WsCallback);
-i_handle_data(<<H, T/binary>>, L, {Socket, SocketMode}, Acc, WsCallback) ->
-    i_handle_data(T, <<L/binary, H>>, {Socket, SocketMode}, Acc, WsCallback);
-i_handle_data(<<>>, L, {_Socket, _SocketMode}, Acc, _WsCallback) ->
-    {Acc, continue, {buffer, L}}.
+    i_handle_data(T, <<>>, Acc2, WsCallback);
+i_handle_data(<<H, T/binary>>, L, Acc, WsCallback) ->
+    i_handle_data(T, <<L/binary, H>>, Acc, WsCallback);
 
 %% ============================ /\ INTERNAL FUNCTIONS =======================================================

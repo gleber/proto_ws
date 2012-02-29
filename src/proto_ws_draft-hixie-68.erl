@@ -35,30 +35,11 @@
 -vsn("0.9-dev").
 
 %% API
--export([check_websocket/1, handshake/3, handle_data/5, format_send/2]).
+-export([handshake/3, handle_data/5, format_send/2]).
 
 -export([required_headers/0]).
 
-%% includes
--include("../include/misultin.hrl").
-
-
 %% ============================ \/ API ======================================================================
-
-%% ----------------------------------------------------------------------------------------------------------
-%% Function: -> true | false
-%% Description: Callback to check if the incoming request is a websocket request according to this protocol.
-%% ----------------------------------------------------------------------------------------------------------
--spec check_websocket(Headers::http_headers()) -> boolean().
-check_websocket(Headers) ->
-    %% set required headers
-    %% check for headers existance
-    case proto_ws:check_headers(Headers, required_headers()) of
-        true -> true;
-        _RemainingHeaders ->
-            ?LOG_DEBUG("not this protocol, remaining headers: ~p", [_RemainingHeaders]),
-            false
-    end.
 
 required_headers() ->
     [
@@ -70,19 +51,20 @@ required_headers() ->
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
 -spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
-handshake(#req{socket_mode = SocketMode, ws_force_ssl = WsForceSsl} = _Req, _Headers, {Path, Origin, Host}) ->
+handshake(#wstate{socket_mode = SocketMode, ws_force_ssl = WsForceSsl, headers = Headers, origin = Origin, path = Path, host = Host} = State) ->
     %% prepare handhsake response
     WsMode = case SocketMode of
                  ssl -> "wss";
                  http when WsForceSsl =:= true  -> "wss"; % behind stunnel or similar, client is using ssl
                  http when WsForceSsl =:= false -> "ws"
              end,
-    ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
-     "Upgrade: WebSocket\r\n",
-     "Connection: Upgrade\r\n",
-     "WebSocket-Origin: ", Origin , "\r\n",
-     "WebSocket-Location: ", WsMode, "://", lists:concat([Host, Path]), "\r\n\r\n"
-    ].
+    Response = ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
+                "Upgrade: WebSocket\r\n",
+                "Connection: Upgrade\r\n",
+                "WebSocket-Origin: ", Origin , "\r\n",
+                "WebSocket-Location: ", WsMode, "://", lists:concat([Host, Path]), "\r\n\r\n"
+               ],
+    {ok, Response, State#wstate{inited = true}}.
 
 %% ----------------------------------------------------------------------------------------------------------
 %% Function: -> {Acc1, websocket_close | {Acc1, websocket_close, DataToSendBeforeClose::binary() | iolist()} | {Acc1, continue, NewState}

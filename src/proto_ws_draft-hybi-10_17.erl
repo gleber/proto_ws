@@ -67,26 +67,7 @@
 %% If we don't find a websocket protocol frame in this many bytes, connection aborts
 -define(MAX_UNPARSED_BUFFER_SIZE, 1024 * 100).
 
-%% includes
--include("../include/misultin.hrl").
-
-
 %% ============================ \/ API ======================================================================
-
-%% ----------------------------------------------------------------------------------------------------------
-%% Function: -> true | false
-%% Description: Callback to check if the incoming request is a websocket request according to this protocol.
-%% ----------------------------------------------------------------------------------------------------------
--spec check_websocket(Headers::http_headers(), RequiredHeaders::http_headers()) -> boolean().
-check_websocket(Headers, RequiredHeaders) ->
-    %% check for headers existance
-    case proto_ws:check_headers(Headers, RequiredHeaders) of
-        true -> true;
-        _RemainingHeaders ->
-            ?LOG_DEBUG("not this protocol, remaining headers: ~p", [_RemainingHeaders]),
-            false
-    end.
-
 %% ----------------------------------------------------------------------------------------------------------
 %% Function: -> iolist() | binary()
 %% Description: Callback to build handshake data.
@@ -94,7 +75,7 @@ check_websocket(Headers, RequiredHeaders) ->
 -spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
 handshake(_Req, Headers, {_Path, _Origin, _Host}) ->
     %% build data
-    Key = list_to_binary(misultin_utility:header_get_value('Sec-WebSocket-Key', Headers)),
+    Key = list_to_binary(proto_ws_utility:header_get_value('Sec-WebSocket-Key', Headers)),
     Accept = base64:encode_to_string(crypto:sha(<<Key/binary, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11">>)),
     ["HTTP/1.1 101 Switching Protocols\r\n",
      "Upgrade: websocket\r\n",

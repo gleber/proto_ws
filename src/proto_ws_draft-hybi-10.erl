@@ -35,27 +35,16 @@
 -vsn("0.9-dev").
 
 %% API
--export([check_websocket/1, handshake/3, handle_data/5, format_send/2]).
+-export([handshake/3, handle_data/5, format_send/2]).
 
 -export([required_headers/0]).
 
 %% macros
 -define(HYBI_COMMON, 'proto_ws_draft-hybi-10_17').
 
-%% includes
--include("../include/misultin.hrl").
-
 
 %% ============================ \/ API ======================================================================
 
-%% ----------------------------------------------------------------------------------------------------------
-%% Function: -> true | false
-%% Description: Callback to check if the incoming request is a websocket request according to this protocol.
-%% ----------------------------------------------------------------------------------------------------------
--spec check_websocket(Headers::http_headers()) -> boolean().
-check_websocket(Headers) ->
-    %% set required headers
-    ?HYBI_COMMON:check_websocket(Headers, required_headers()).
 
 required_headers() ->
     [
