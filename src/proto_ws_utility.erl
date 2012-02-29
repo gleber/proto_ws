@@ -32,7 +32,6 @@
 
 %% API
 -export([get_http_status_code/2, get_http_status_message/1, get_content_type/1, get_key_value/2, header_get_value/2]).
--export([call/2, call/3, respond/2]).
 -export([parse_qs/1, parse_qs/2, unquote/1, quote_plus/1, get_peer/2]).
 -export([convert_ip_to_list/1]).
 -export([hexstr/1, get_unix_timestamp/0, get_unix_timestamp/1]).
