@@ -4,7 +4,7 @@
 %% >-|-|-(°>
 %%
 %% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>
-%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -37,11 +37,23 @@
 %% API
 -export([init/5, handle_data/4, format_send/2]).
 
-%% behaviour
--export([behaviour_info/1]).
-
 -include("../include/proto_ws.hrl").
 
+-callback handshake(#wstate{}) -> {'ok', iolist(), #wstate{}}.
+-callback handshake_continue(WsCallback::fun(),
+                             Acc::term(),
+                             Data::binary(),
+                             State::wstate()) ->
+    {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+-callback handle_data(WsCallback::fun(),
+                      Acc::term(),
+                      Data::binary(),
+                      State::wstate()) ->
+    {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+-callback format_send(Data::iolist(), State::term()) -> binary().
+
+%% behaviour
+%% -export([behaviour_info/1]).
 
 %% ============================ \/ API ======================================================================
 
@@ -75,7 +87,7 @@ handle_data(CB, Acc0, Data, #wstate{inited = false, vsnmod = VsnMod} = State) ->
     VsnMod:handshake_continue(CB, Acc0, Data, State);
 handle_data(CB, Acc0, Data, #wstate{inited = true, vsnmod = VsnMod} = State) ->
     VsnMod:handle_data(CB, Acc0, Data, State).
-    
+
 %% Check if headers correspond to headers requirements.
 -spec check_headers(Headers::http_headers(), RequiredHeaders::http_headers()) -> true | http_headers().
 check_headers(Headers, RequiredHeaders) ->
@@ -103,16 +115,16 @@ check_headers(Headers, RequiredHeaders) ->
 
 %% ============================ \/ INTERNAL FUNCTIONS =======================================================
 
-%% behaviour
-behaviour_info(callbacks) ->
-    [
-     {handshake, 1},
-     {handshake_continue, 4},
-     {handle_data, 4},
-     {format_send, 2}
-    ];
-behaviour_info(_) ->
-    undefined.
+%% %% behaviour
+%% behaviour_info(callbacks) ->
+%%     [
+%%      {handshake, 1},
+%%      {handshake_continue, 4},
+%%      {handle_data, 4},
+%%      {format_send, 2}
+%%     ];
+%% behaviour_info(_) ->
+%%     undefined.
 
 %% Loop to check for all available supported websocket protocols.
 -spec check_websockets(VsnSupported::[websocket_version()], Headers::http_headers()) -> false | {true, Vsn::websocket_version()}.
