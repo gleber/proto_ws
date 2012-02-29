@@ -1,9 +1,10 @@
 %% ==========================================================================================================
-%% MISULTIN - WebSocket
+%% PROTO_WS based on Misultin - WebSocket
 %%
 %% >-|-|-(°>
 %%
 %% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>, Joe Armstrong.
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -39,6 +40,10 @@
 
 -export([required_headers/0]).
 
+-export([i_handle_data/4]).
+
+-include("../include/proto_ws.hrl").
+
 %% ============================ \/ API ======================================================================
 
 required_headers() ->
@@ -48,13 +53,15 @@ required_headers() ->
     ].
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> iolist() | binary()
-%% Description: Callback to build handshake data.
+%% Description: Callback to initiate handshake
 %% ----------------------------------------------------------------------------------------------------------
--spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
+-spec handshake(wstate()) -> {'ok', binary(), wstate()}.
 handshake(State) ->
     {ok, <<>>, State#wstate{inited = false}}.
 
+%% ----------------------------------------------------------------------------------------------------------
+%% Description: Callback finalize handshake
+%% ----------------------------------------------------------------------------------------------------------
 handshake_continue(CB, Acc0, Data,
                    #wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
     Key1 = proto_ws_utility:header_get_value('Sec-WebSocket-Key1', Headers),
@@ -90,31 +97,27 @@ handshake_continue(CB, Acc0, Data,
                     handle_data(CB, Acc0, Rest, State#wstate{buffer = <<>>, inited = true})
             end;
         Buffer2 ->
-            {Acc0, continue, Response, State#wstate{buffer = Buffer2, inited = false}}
+            {Acc0, continue, <<>>, State#wstate{buffer = Buffer2, inited = false}}
     end.    
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> {Acc1, websocket_close | {Acc1, websocket_close, DataToSendBeforeClose::binary() | iolist()} | {Acc1, continue, NewState}
 %% Description: Callback to handle incomed data.
 %% ----------------------------------------------------------------------------------------------------------
 -spec handle_data(WsCallback::fun(),
+                  Acc0::term(),
                   Data::binary(),
-                  State::websocket_state() | term(),
-                  {Socket::socket(), SocketMode::socketmode()},
-                  term()
-                  ) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, Buffer, websocket_state()}.
+                  State::wstate()) ->
+                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
 handle_data(CB, Acc0, Data,
-            #wstate{headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
+            #wstate{buffer = Buffer} = State) ->
     case i_handle_data(<<Buffer/binary, Data/binary>>, <<>>, CB, Acc0) of
         {Acc, continue, Buffer2} ->
-            {Acc, continue, State#state{buffer = Buffer2}};
+            {Acc, continue, State#wstate{buffer = Buffer2}};
         {Acc, websocket_close, SendData} ->
-            {Acc, websocket_close, SendData, State#state{buffer = <<>>}}
+            {Acc, websocket_close, SendData, State#wstate{buffer = <<>>}}
     end.
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> binary() | iolist()
 %% Description: Callback to format data before it is sent into the socket.
 %% ----------------------------------------------------------------------------------------------------------
 -spec format_send(Data::iolist(), State::term()) -> iolist().
@@ -147,6 +150,6 @@ i_handle_data(<<255, T/binary>>, L, Acc, WsCallback) ->
     Acc2 = WsCallback(L, Acc),
     i_handle_data(T, <<>>, Acc2, WsCallback);
 i_handle_data(<<H, T/binary>>, L, Acc, WsCallback) ->
-    i_handle_data(T, <<L/binary, H>>, Acc, WsCallback);
+    i_handle_data(T, <<L/binary, H>>, Acc, WsCallback).
 
 %% ============================ /\ INTERNAL FUNCTIONS =======================================================

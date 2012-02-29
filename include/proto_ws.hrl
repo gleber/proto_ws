@@ -1,5 +1,5 @@
 %% ==========================================================================================================
-%% MISULTIN - Include file
+%% PROTO_WS based on Misultin - Include file
 %%
 %% Copyright (C) 2011, Sean Hinde, Roberto Ostinelli <roberto@ostinelli.net>
 %% All rights reserved.
@@ -99,8 +99,27 @@
 -type gen_proplist_options() :: [{Tag::atom()|list()|binary(), Value::term()} | atom()].
 
 -type date_tuple() :: {{non_neg_integer(), 1..12, 1..31}, {0..24, 0..60, 0..60}}.
+
 %% ---------------------------- /\ OTHER --------------------------------------------------------------------
 
 %% ============================ /\ TYPES ====================================================================
+
+-record(wstate, {vsn,
+                 vsnmod,
+
+                 path,
+                 origin,
+                 host,
+                 
+                 socket_mode,
+                 force_ssl,
+                 
+                 headers,
+                 inited = false,
+
+                 buffer = <<>>,
+                 internal}).
+
+-type wstate() :: #wstate{}.
 
 %%% ============================ /\ RECORDS ==================================================================

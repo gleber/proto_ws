@@ -1,10 +1,11 @@
 %% ==========================================================================================================
-%% MISULTIN - WebSocket - common implementation patterns of draft hybi 10 and 17
+%% PROTO_WS based on Misultin - WebSocket - common implementation patterns of draft hybi 10 and 17
 %%
 %% >-|-|-(°>
 %%
 %% Copyright (C) 2011, Richard Jones <rj@metabrew.com>, Roberto Ostinelli <roberto@ostinelli.net>,
-%%                                        portions of code from Andy W. Song <https://github.com/awsong/erl_websocket>
+%%                     portions of code from Andy W. Song <https://github.com/awsong/erl_websocket>
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -35,14 +36,9 @@
 -vsn("0.9-dev").
 
 %% API
--export([check_websocket/2, handshake/3, handle_data/5, format_send/2]).
+-export([handshake/1, handshake_continue/4, handle_data/4, format_send/2]).
 
-%% records
--record(state, {
-          buffer        = <<>>,
-          mask_key  = <<0,0,0,0>>,
-          fragments = [] %% if we are in the midst of receving a fragmented message, fragments are contained here in reverse order
-         }).
+-include("../include/proto_ws.hrl").
 
 -record(frame, {fin,
                 rsv1,
@@ -69,41 +65,44 @@
 
 %% ============================ \/ API ======================================================================
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> iolist() | binary()
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
-handshake(_Req, Headers, {_Path, _Origin, _Host}) ->
+-spec handshake(wstate()) -> {'ok', binary(), wstate()}.
+handshake(#wstate{headers = Headers} = State) ->
     %% build data
     Key = list_to_binary(proto_ws_utility:header_get_value('Sec-WebSocket-Key', Headers)),
     Accept = base64:encode_to_string(crypto:sha(<<Key/binary, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11">>)),
-    ["HTTP/1.1 101 Switching Protocols\r\n",
-     "Upgrade: websocket\r\n",
-     "Connection: Upgrade\r\n",
-     "Sec-WebSocket-Accept: ", Accept, "\r\n\r\n"
-    ].
+    Response = ["HTTP/1.1 101 Switching Protocols\r\n",
+                "Upgrade: websocket\r\n",
+                "Connection: Upgrade\r\n",
+                "Sec-WebSocket-Accept: ", Accept, "\r\n\r\n"
+               ],
+    {ok, Response, State#wstate{inited = true}}.
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> {Acc1, websocket_close | {Acc1, websocket_close, DataToSendBeforeClose::binary() | iolist()} | {Acc1, continue, NewState}
+%% Description: Callback to finalize handshake.
+%% ----------------------------------------------------------------------------------------------------------
+-spec handshake_continue(WsCallback::fun(),
+                         Acc0::term(),
+                         Data::binary(),
+                         State::wstate()) ->
+                                {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
+handshake_continue(_CB, _Acc0, _Data, _State) ->
+    erlang:error(should_not_happen).
+
+%% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback to handle incomed data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handle_data(Data::binary(),
-                  State::websocket_state() | term(),
-                  {Socket::socket(), SocketMode::socketmode()},
-                  Acc::term(),
-                  WsCallback::fun()) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, websocket_state()}.
-handle_data(Data, St, Tuple, Acc, WsCallback) when is_list(Data) ->
-    handle_data(list_to_binary(Data), St, Tuple, Acc, WsCallback);
-handle_data(Data, undefined, {Socket, SocketMode}, Acc0, WsCallback) when is_binary(Data) ->
-    %% init status
-    i_handle_data(#state{buffer = Data}, {Socket, SocketMode}, Acc0, WsCallback);
-handle_data(Data, State = #state{buffer = Buffer}, {Socket, SocketMode}, Acc0, WsCallback) when is_binary(Data) ->
-    %% read status
-    i_handle_data(State#state{buffer = <<Buffer/binary, Data/binary>>}, {Socket, SocketMode}, Acc0, WsCallback).
+-spec handle_data(WsCallback::fun(),
+                  Acc0::term(),
+                  Data::binary(),
+                  State::wstate()) ->
+                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
+handle_data(WsCallback, Acc0, Data,
+            #wstate{buffer = Buffer} = State) ->
+    i_handle_data(State#wstate{buffer = <<Buffer/binary, Data/binary>>},  Acc0, WsCallback).
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> binary() | iolist()
 %% Description: Callback to format data before it is sent into the socket.
 %% ----------------------------------------------------------------------------------------------------------
 -spec format_send(Data::iolist(), State::term()) -> binary().
@@ -226,8 +225,8 @@ take_frame(Data) when is_binary(Data), size(Data) >= ?MAX_UNPARSED_BUFFER_SIZE -
     {error, max_size_reached}.
 
 %% process incoming data
--spec i_handle_data(#state{}, {Socket::socket(), SocketMode::socketmode()}, Acc::term(), WsCallback::fun()) -> {term(), continue, #state{}} | {term(), websocket_close, term()}.
-i_handle_data(#state{buffer=ToParse} = State, {Socket, SocketMode}, Acc0, WsCallback) ->
+-spec i_handle_data(#wstate{}, Acc::term(), WsCallback::fun()) -> {term(), continue, #wstate{}} | {term(), websocket_close, term()}.
+i_handle_data(#wstate{buffer=ToParse} = State,  Acc0, WsCallback) ->
     case take_frame(ToParse) of
         {error, max_size_reached} ->
             ?LOG_DEBUG("reached max unparsed buffer size, aborting connection", []),
@@ -235,7 +234,7 @@ i_handle_data(#state{buffer=ToParse} = State, {Socket, SocketMode}, Acc0, WsCall
         {undefined, Rest} ->
             ?LOG_DEBUG("no frame to take, add to buffer: ~p", [Rest]),
             %% no full frame to be had yet
-            {Acc0, continue, State#state{buffer = Rest}};
+            {Acc0, continue, State#wstate{buffer = Rest}};
         {Frame=#frame{}, Rest} ->
             ?LOG_DEBUG("parsed frame ~p, remaining buffer is: ~p", [Frame,Rest]),
             %% sanity check, in case client is broken
@@ -243,11 +242,11 @@ i_handle_data(#state{buffer=ToParse} = State, {Socket, SocketMode}, Acc0, WsCall
                 true ->
                     ?LOG_DEBUG("sanity checks successfully performed",[]),
                     case handle_frame(Frame,
-                                      State#state{buffer = Rest},
-                                      {Socket, SocketMode}, Acc0, WsCallback) of
+                                      State#wstate{buffer = Rest},
+                                      Acc0, WsCallback) of
                         %% tail-call if there is stuff in the buffer still to parse
-                        NewState = #state{buffer = B} when is_binary(B), B =/= <<>> ->
-                            i_handle_data(NewState, {Socket, SocketMode}, Acc0, WsCallback);
+                        NewState = #wstate{buffer = B} when is_binary(B), B =/= <<>> ->
+                            i_handle_data(NewState,  Acc0, WsCallback);
                         Other ->
                             Other
                     end;
@@ -272,28 +271,27 @@ sanity_check(Frame) ->
 
 %% ---------------------------- \/ fragment handling --------------------------------------------------------
 
--spec handle_frame(#frame{}, #state{}, {Socket::socket(), SocketMode::socketmode()}, Acc0::term(), WsCallback::fun()) -> {term(), continue, #state{}} | {term(), websocket_close, term()}.
+-spec handle_frame(#frame{}, #wstate{}, Acc0::term(), WsCallback::fun()) -> {term(), continue, #wstate{}} | {term(), websocket_close, term()}.
 %% FRAGMENT - add to the list and carry on
 %% "A fragmented message consists of a single frame with the FIN bit
 %%     clear and an opcode other than 0, followed by zero or more frames
 %%     with the FIN bit clear and the opcode set to 0, and terminated by
 %%     a single frame with the FIN bit set and an opcode of 0"
 handle_frame(#frame{fin = 0, opcode = Opcode}, %% first fragment
-             State = #state{fragments = []} = Frame,
-             _, Acc0, _) when Opcode =/= ?OP_CONT ->
+             State = #wstate{internal = []} = Frame,
+             Acc0, _) when Opcode =/= ?OP_CONT ->
     ?LOG_DEBUG("first fragment: ~p", [Frame]),
-    {Acc0, continue, State#state{fragments = [Frame]}};
+    {Acc0, continue, State#wstate{internal = [Frame]}};
 handle_frame(#frame{fin = 0, opcode = ?OP_CONT}, %% subsequent fragments
-             State = #state{fragments = Frags} = Frame,
-             _, Acc0, _) when Frags =/= [] ->
+             State = #wstate{internal = Frags} = Frame,
+             Acc0, _) when Frags =/= [] ->
     ?LOG_DEBUG("next fragment: ~p", [Frame]),
-    {Acc0, continue, State#state{fragments = [Frame | Frags]}};
+    {Acc0, continue, State#wstate{internal = [Frame | Frags]}};
 
 %% Last frame in a fragmented message.
 %% reassemble one large frame based on all the fragments, keeping opcode from first:
 handle_frame(#frame{fin = 1, opcode = ?OP_CONT } = F,
-             State = #state{fragments = Frags},
-             {Socket, SocketMode},
+             State = #wstate{internal = Frags},
              Acc0, WsCallback) when Frags =/= [] ->
     [Frame1|Frames] = lists:reverse([F|Frags]),
     Frame = lists:foldl(
@@ -306,10 +304,10 @@ handle_frame(#frame{fin = 1, opcode = ?OP_CONT } = F,
              ),
     ?LOG_DEBUG("final fragment, assembled: ~p",[Frame]),
     %% now process this new combined message as if we got it all at once:
-    handle_frame(Frame, State#state{fragments = []}, {Socket, SocketMode}, Acc0, WsCallback);
+    handle_frame(Frame, State#wstate{internal = []},  Acc0, WsCallback);
 
 %% end of fragments but no fragments stored - error
-handle_frame(#frame{fin = 1, opcode = ?OP_CONT}, _, _, Acc0, _) ->
+handle_frame(#frame{fin = 1, opcode = ?OP_CONT}, _, Acc0, _) ->
     %% closing, should only happen if client is broken
     {Acc0, websocket_close, websocket_close_data()};
 
@@ -322,7 +320,6 @@ handle_frame(#frame{fin = 1, opcode = ?OP_CONT}, _, _, Acc0, _) ->
 %%                                     3) can appear between larger fragmented message frames
 handle_frame(#frame{fin=1, opcode=Opcode, data=Data},
              State,
-             {Socket, SocketMode},
              Acc0, _WsCallback) when ?IS_CONTROL_OPCODE(Opcode) ->
     %% handle all known control opcodes:
     case Opcode of
@@ -339,7 +336,6 @@ handle_frame(#frame{fin=1, opcode=Opcode, data=Data},
 %% NORMAL FRAME (not a fragment, not a control frame)
 handle_frame(#frame{fin=1, opcode=Opcode, data=Data},
              State,
-             {_Socket, _SocketMode},
              Acc0, WsCallback) when Opcode =:= ?OP_BIN; Opcode =:= ?OP_TEXT ->
     Acc2 = WsCallback(Data, Acc0),
     {Acc2, continue, State}.

@@ -7,9 +7,11 @@ discontinued we factored out Websocket-specific code into separate
 project along with some changes which allows for easier integration
 into other projects.
 
-The code has been functionalized and parsing functions are pure. They
-do not operate on sockets, instead they are working on stream of bytes
-only.
+The code has been functionalized and all parsing functions are
+pure. They do not operate on sockets, instead they are working on
+stream of bytes only. They provide foldl-like API, allowing to operate
+on received messages right away or accumulated depending on the needs
+of users.
 
 License
 =======

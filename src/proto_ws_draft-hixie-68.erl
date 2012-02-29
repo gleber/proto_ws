@@ -1,9 +1,10 @@
 %% ==========================================================================================================
-%% MISULTIN - WebSocket
+%% PROTO_WS based on Misultin - WebSocket
 %%
 %% >-|-|-(°>
 %%
 %% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>, Joe Armstrong.
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -35,9 +36,11 @@
 -vsn("0.9-dev").
 
 %% API
--export([handshake/3, handle_data/5, format_send/2]).
+-export([handshake/1, handshake_continue/4, handle_data/4, format_send/2]).
 
 -export([required_headers/0]).
+
+-include("../include/proto_ws.hrl").
 
 %% ============================ \/ API ======================================================================
 
@@ -47,11 +50,10 @@ required_headers() ->
     ].
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> iolist() | binary()
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
-handshake(#wstate{socket_mode = SocketMode, ws_force_ssl = WsForceSsl, headers = Headers, origin = Origin, path = Path, host = Host} = State) ->
+-spec handshake(#wstate{}) -> {'ok', iolist(), #wstate{}}.
+handshake(#wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, origin = Origin, path = Path, host = Host} = State) ->
     %% prepare handhsake response
     WsMode = case SocketMode of
                  ssl -> "wss";
@@ -66,25 +68,32 @@ handshake(#wstate{socket_mode = SocketMode, ws_force_ssl = WsForceSsl, headers =
                ],
     {ok, Response, State#wstate{inited = true}}.
 
-%% ----------------------------------------------------------------------------------------------------------
-%% Function: -> {Acc1, websocket_close | {Acc1, websocket_close, DataToSendBeforeClose::binary() | iolist()} | {Acc1, continue, NewState}
-%% Description: Callback to handle incomed data.
-%% ----------------------------------------------------------------------------------------------------------
--spec handle_data(Data::binary(),
-                  State::websocket_state() | term(),
-                  {Socket::socket(), SocketMode::socketmode()},
-                  term(),
-                  WsCallback::fun()) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, websocket_state()}.
-handle_data(Data, undefined, {Socket, SocketMode}, Acc0, WsCallback) ->
-    %% init status
-    handle_data(Data, {buffer, none}, {Socket, SocketMode}, Acc0, WsCallback);
-handle_data(Data, {buffer, B} = _State, {Socket, SocketMode}, Acc0, WsCallback) ->
-    %% read status
-    i_handle_data(Data, B, {Socket, SocketMode}, Acc0, WsCallback).
+-spec handshake_continue(WsCallback::fun(),
+                         Acc0::term(),
+                         Data::binary(),
+                         State::wstate()) ->
+                                {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
+handshake_continue(_CB, _Acc0, _Data, _State) ->
+    erlang:error(should_not_happen).
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> binary() | iolist()
+%% Description: Callback to handle incomed data.
+%% ----------------------------------------------------------------------------------------------------------
+-spec handle_data(WsCallback::fun(),
+                  Acc0::term(),
+                  Data::binary(),
+                  State::wstate()) ->
+                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, binary(), wstate()}.
+handle_data(CB, Acc0, Data,
+            #wstate{buffer = Buffer} = State) ->
+    case i_handle_data(<<Buffer/binary, Data/binary>>, <<>>, CB, Acc0) of
+        {Acc, continue, Buffer2} ->
+            {Acc, continue, State#wstate{buffer = Buffer2}};
+        {Acc, websocket_close, SendData} ->
+            {Acc, websocket_close, SendData, State#wstate{buffer = <<>>}}
+    end.
+
+%% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback to format data before it is sent into the socket.
 %% ----------------------------------------------------------------------------------------------------------
 -spec format_send(Data::iolist(), State::term()) -> iolist().
@@ -98,24 +107,12 @@ format_send(Data, _State) ->
 
 %% Buffering and data handling
 -spec i_handle_data(Data::binary(),
-                    Buffer::binary() | none,
-                    {Socket::socket(), SocketMode::socketmode()},
-                    Acc0::term(),
-                    WsCallback::fun()) -> {term(), websocket_close} | {term(), continue, term()}.
-i_handle_data(<<0, T/binary>>, none, {Socket, SocketMode}, Acc0, WsCallback) ->
-    i_handle_data(T, <<>>, {Socket, SocketMode}, Acc0, WsCallback);
-i_handle_data(<<>>, none, {_Socket, _SocketMode}, Acc0, _WsCallback) ->
-    %% return status
-    {Acc0, continue, {buffer, none}};
-i_handle_data(<<255, 0>>, _L, {Socket, SocketMode}, Acc0, _WsCallback) ->
-    ?LOG_DEBUG("websocket close message received from client, closing websocket with pid ~p", [self()]),
-    {Acc0, websocket_close, <<255, 0>>};
-i_handle_data(<<255, T/binary>>, L, {Socket, SocketMode}, Acc0, WsCallback) ->
-    Acc2 = WsCallback(L, Acc0),
-    i_handle_data(T, none, {Socket, SocketMode}, Acc2, WsCallback);
-i_handle_data(<<H, T/binary>>, L, {Socket, SocketMode}, Acc0, WsCallback) ->
-    i_handle_data(T, <<L/binary, H>>, {Socket, SocketMode}, Acc0, WsCallback);
-i_handle_data(<<>>, L, {_Socket, _SocketMode}, Acc0, _WsCallback) ->
-    {Acc0, continue, {buffer, L}}.
+                    Buffer::binary(),
+                    Acc::term(),
+                    WsCallback::pid()) ->
+                           {term(), websocket_close, SendData::binary()} |
+                           {term(), continue, NewBuffer::binary()}.
+i_handle_data(Data, Buffer, Acc, WsCallback) ->
+    'proto_ws_draft-hixie-76':i_handle_data(Data, Buffer, Acc, WsCallback).
 
 %% ============================ /\ INTERNAL FUNCTIONS =======================================================

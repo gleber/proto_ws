@@ -1,9 +1,10 @@
 %% ==========================================================================================================
-%% MISULTIN - WebSocket
+%% PROTO_WS based on Misultin - WebSocket
 %%
 %% >-|-|-(°>
 %%
-%% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>.
+%% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -34,35 +35,19 @@
 -vsn("0.9-dev").
 
 %% API
--export([init/5, handle_data/4]).
+-export([init/5, handle_data/4, format_send/2]).
 
 %% behaviour
 -export([behaviour_info/1]).
 
--record(wstate, {vsn,
-                 vsnmod,
-
-                 path,
-                 origin,
-                 host,
-                 
-                 socket_mode,
-                 force_ssl,
-                 
-                 headers,
-                 inited = false,
-
-                 buffer = <<>>,
-                 internal}).
+-include("../include/proto_ws.hrl").
 
 
 %% ============================ \/ API ======================================================================
 
 -spec init(WsVersions::[websocket_version()],
            Path::string(),
-           Origin::string(),
-           Host::string(),
-           SocketMode::socket_mode(),
+           SocketMode::socketmode(),
            ForceSsl::boolean(),
            Headers::http_headers()) -> {error, atom()} | {ok, State::#wstate{}}.
 init(WsVersions, Path, SocketMode, ForceSsl, Headers) ->
@@ -83,12 +68,12 @@ init(WsVersions, Path, SocketMode, ForceSsl, Headers) ->
             VsnMod:handshake(State)
     end.
 
-format_send(Data, #wstate{vsnmod = VsnMod} = State) ->
+format_send(Data, #wstate{vsnmod = VsnMod} = _State) ->
     VsnMod:format_send(Data).
 
-handle_data(CB, Acc0, Data, #wstate{inited = false, VsnMod = VsnMod} = State) ->
+handle_data(CB, Acc0, Data, #wstate{inited = false, vsnmod = VsnMod} = State) ->
     VsnMod:handshake_continue(CB, Acc0, Data, State);
-handle_data(CB, Acc0, Data, #wstate{inited = true, VsnMod = VsnMod} = State) ->
+handle_data(CB, Acc0, Data, #wstate{inited = true, vsnmod = VsnMod} = State) ->
     VsnMod:handle_data(CB, Acc0, Data, State).
     
 %% Check if headers correspond to headers requirements.

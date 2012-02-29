@@ -1,9 +1,10 @@
 %% ==========================================================================================================
-%% MISULTIN - WebSocket - draft hybi 10
+%% PROTO_WS based on Misultin - WebSocket - draft hybi 10
 %%
 %% >-|-|-(°>
 %%
 %% Copyright (C) 2011, Roberto Ostinelli <roberto@ostinelli.net>.
+%%                     Gleb Peregud <gleber.p@gmail.com> for LivePress Inc.           
 %% All rights reserved.
 %%
 %% Code portions from Joe Armstrong have been originally taken under MIT license at the address:
@@ -35,17 +36,16 @@
 -vsn("0.9-dev").
 
 %% API
--export([handshake/3, handle_data/5, format_send/2]).
+-export([handshake/1, handshake_continue/4, handle_data/4, format_send/2]).
 
 -export([required_headers/0]).
+
+-include("../include/proto_ws.hrl").
 
 %% macros
 -define(HYBI_COMMON, 'proto_ws_draft-hybi-10_17').
 
-
 %% ============================ \/ API ======================================================================
-
-
 required_headers() ->
     [
      {'Upgrade', "websocket"}, {'Connection', "Upgrade"}, {'Host', ignore}, {'Sec-Websocket-Origin', ignore},
@@ -53,28 +53,35 @@ required_headers() ->
     ].
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> iolist() | binary()
 %% Description: Callback to build handshake data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handshake(Req::#req{}, Headers::http_headers(), {Path::string(), Origin::string(), Host::string()}) -> iolist().
-handshake(Req, Headers, {Path, Origin, Host}) ->
-    ?HYBI_COMMON:handshake(Req, Headers, {Path, Origin, Host}).
+-spec handshake(#wstate{}) -> {'ok', iolist(), #wstate{}}.
+handshake(State) ->
+    ?HYBI_COMMON:handshake(State).
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> {Acc1, websocket_close | {Acc1, websocket_close, DataToSendBeforeClose::binary() | iolist()} | {Acc1, continue, NewState}
+%% Description: Callback to finalize handshake.
+%% ----------------------------------------------------------------------------------------------------------
+-spec handshake_continue(WsCallback::fun(),
+                         Acc::term(),
+                         Data::binary(),
+                         State::wstate()) ->
+                                {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+handshake_continue(WsCallback, Acc0, Data, State) ->
+    ?HYBI_COMMON:handshake_continue(WsCallback, Acc0, Data, State).
+
+%% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback to handle incomed data.
 %% ----------------------------------------------------------------------------------------------------------
--spec handle_data(Data::binary(),
-                  State::websocket_state() | term(),
-                  {Socket::socket(), SocketMode::socketmode()},
+-spec handle_data(WsCallback::fun(),
                   Acc::term(),
-                  WsCallback::fun()) ->
-                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, websocket_state()}.
-handle_data(Data, St, Tuple, Acc, WsCallback) ->
-    ?HYBI_COMMON:handle_data(Data, St, Tuple, Acc, WsCallback).
+                  Data::binary(),
+                  State::wstate()) ->
+                         {term(), websocket_close} | {term(), websocket_close, binary()} | {term(), continue, wstate()}.
+handle_data(WsCallback, Acc0, Data, State) ->
+    ?HYBI_COMMON:handle_data(WsCallback, Acc0, Data, State).
 
 %% ----------------------------------------------------------------------------------------------------------
-%% Function: -> binary() | iolist()
 %% Description: Callback to format data before it is sent into the socket.
 %% ----------------------------------------------------------------------------------------------------------
 -spec format_send(Data::iolist(), State::term()) -> binary().
