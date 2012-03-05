@@ -109,8 +109,8 @@ init(WsVersions, Path, SocketMode, ForceSsl, Headers) ->
             end
     end.
 
-format_send(Data, #wstate{vsnmod = VsnMod} = _State) ->
-    VsnMod:format_send(Data).
+format_send(Data, #wstate{vsnmod = VsnMod} = State) ->
+    VsnMod:format_send(Data, State).
 
 -spec handle_data(WsCallback::fun(),
                   Acc::term(),
@@ -172,7 +172,7 @@ check_websockets([Vsn|T], Headers) ->
     case check_headers(Headers, VsnMod:required_headers()) of
         true -> {true, Vsn, VsnMod};
         _RemainingHeaders ->
-            check_headers(T, Headers)
+            check_websockets(T, Headers)
     end.
 
 %% convert websocket version to module name
