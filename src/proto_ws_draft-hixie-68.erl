@@ -64,7 +64,7 @@ handshake(#wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, origin = Ori
                 "Upgrade: WebSocket\r\n",
                 "Connection: Upgrade\r\n",
                 "WebSocket-Origin: ", Origin , "\r\n",
-                "WebSocket-Location: ", WsMode, "://", lists:concat([Host, Path]), "\r\n\r\n"
+                "WebSocket-Location: ", WsMode, "://", Host, Path, "\r\n\r\n"
                ],
     {ok, Response, State#wstate{inited = true}}.
 
@@ -92,7 +92,7 @@ handshake_continue(_CB, _Acc0, _Data, _State) ->
                          {term(), 'continue', binary(), wstate()}.
 handle_data(CB, Acc0, Data,
             #wstate{buffer = Buffer} = State) ->
-    case i_handle_data(<<Buffer/binary, Data/binary>>, <<>>, CB, Acc0) of
+    case i_handle_data(<<Buffer/binary, Data/binary>>, <<>>, Acc0, CB) of
         {Acc, continue, Buffer2} ->
             {Acc, continue, State#wstate{buffer = Buffer2}};
         {Acc, websocket_close, SendData} ->
@@ -115,7 +115,7 @@ format_send(Data, _State) ->
 -spec i_handle_data(Data::binary(),
                     Buffer::binary(),
                     Acc::term(),
-                    WsCallback::pid()) ->
+                    WsCallback::fun()) ->
                            {term(), websocket_close, SendData::binary()} |
                            {term(), continue, NewBuffer::binary()}.
 i_handle_data(Data, Buffer, Acc, WsCallback) ->
