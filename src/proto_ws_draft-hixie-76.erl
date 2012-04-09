@@ -67,7 +67,7 @@ handshake_continue(CB, Acc0, Data,
     Key1 = proto_ws_utility:header_get_value('Sec-WebSocket-Key1', Headers),
     Key2 = proto_ws_utility:header_get_value('Sec-WebSocket-Key2', Headers),
     case <<Buffer/binary, Data/binary>> of
-        <<Body:64, Rest/binary>> ->
+        <<Body:8/binary, Rest/binary>> ->
             WsMode = case SocketMode of
                          ssl -> "wss";
                          http when WsForceSsl =:= true  -> "wss"; % behind stunnel or similar, client is using ssl
