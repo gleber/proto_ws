@@ -235,18 +235,18 @@ take_frame(Data) when is_binary(Data), size(Data) >= ?MAX_UNPARSED_BUFFER_SIZE -
 i_handle_data(#wstate{buffer=ToParse} = State,  Acc0, WsCallback) ->
     case take_frame(ToParse) of
         {error, max_size_reached} ->
-            ?LOG_DEBUG("reached max unparsed buffer size, aborting connection", []),
+            ?PWS_LOG_DEBUG("reached max unparsed buffer size, aborting connection", []),
             {Acc0, websocket_close, websocket_close_data()};
         {undefined, Rest} ->
-            ?LOG_DEBUG("no frame to take, add to buffer: ~p", [Rest]),
+            ?PWS_LOG_DEBUG("no frame to take, add to buffer: ~p", [Rest]),
             %% no full frame to be had yet
             {Acc0, continue, State#wstate{buffer = Rest}};
         {Frame=#frame{}, Rest} ->
-            ?LOG_DEBUG("parsed frame ~p, remaining buffer is: ~p", [Frame,Rest]),
+            ?PWS_LOG_DEBUG("parsed frame ~p, remaining buffer is: ~p", [Frame,Rest]),
             %% sanity check, in case client is broken
             case sanity_check(Frame) of
                 true ->
-                    ?LOG_DEBUG("sanity checks successfully performed",[]),
+                    ?PWS_LOG_DEBUG("sanity checks successfully performed",[]),
                     case handle_frame(Frame,
                                       State#wstate{buffer = Rest},
                                       Acc0, WsCallback) of
@@ -257,7 +257,7 @@ i_handle_data(#wstate{buffer=ToParse} = State,  Acc0, WsCallback) ->
                             Other
                     end;
                 false -> % protocol error
-                    ?LOG_DEBUG("sanity checks errors encountered, closing websocket",[]),
+                    ?PWS_LOG_DEBUG("sanity checks errors encountered, closing websocket",[]),
                     {Acc0, websocket_close, websocket_close_data()}
             end
     end.
@@ -286,12 +286,12 @@ sanity_check(Frame) ->
 handle_frame(#frame{fin = 0, opcode = Opcode}, %% first fragment
              State = #wstate{internal = []} = Frame,
              Acc0, _) when Opcode =/= ?OP_CONT ->
-    ?LOG_DEBUG("first fragment: ~p", [Frame]),
+    ?PWS_LOG_DEBUG("first fragment: ~p", [Frame]),
     {Acc0, continue, State#wstate{internal = [Frame]}};
 handle_frame(#frame{fin = 0, opcode = ?OP_CONT}, %% subsequent fragments
              State = #wstate{internal = Frags} = Frame,
              Acc0, _) when Frags =/= [] ->
-    ?LOG_DEBUG("next fragment: ~p", [Frame]),
+    ?PWS_LOG_DEBUG("next fragment: ~p", [Frame]),
     {Acc0, continue, State#wstate{internal = [Frame | Frags]}};
 
 %% Last frame in a fragmented message.
@@ -308,7 +308,7 @@ handle_frame(#frame{fin = 1, opcode = ?OP_CONT } = F,
               Frame1#frame{fin=1},
               Frames
              ),
-    ?LOG_DEBUG("final fragment, assembled: ~p",[Frame]),
+    ?PWS_LOG_DEBUG("final fragment, assembled: ~p",[Frame]),
     %% now process this new combined message as if we got it all at once:
     handle_frame(Frame, State#wstate{internal = []},  Acc0, WsCallback);
 
@@ -332,10 +332,10 @@ handle_frame(#frame{fin=1, opcode=Opcode, data=Data},
         ?OP_PING ->
             {Acc0, continue, format_send(Data, ?OP_PONG, State), State};
         ?OP_CLOSE ->
-            ?LOG_DEBUG("received a websocket close request",[]),
+            ?PWS_LOG_DEBUG("received a websocket close request",[]),
             {Acc0, websocket_close};
         _OpOther ->
-            ?LOG_DEBUG("received segment with the unknown control OpCode ~p, closing websocket", [_OpOther]),
+            ?PWS_LOG_DEBUG("received segment with the unknown control OpCode ~p, closing websocket", [_OpOther]),
             {Acc0, websocket_close, websocket_close_data()}
     end;
 

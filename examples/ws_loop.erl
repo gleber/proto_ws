@@ -71,7 +71,7 @@ loop(Socket, State) ->
 %% Connect and handshake with Websocket.
 -spec connect(ServerRef::pid(), Req::#req{}, Ws::#ws{}, WsLoop::function()) -> true.
 connect(ServerRef, #req{headers = Headers} = Req, #ws{vsn = Vsn, socket = Socket, socket_mode = SocketMode, path = Path} = Ws, WsLoop) ->
-    ?LOG_DEBUG("building handshake response", []),
+    ?PWS_LOG_DEBUG("building handshake response", []),
     %% get data
     Origin = proto_ws_utility:header_get_value('Origin', Headers),
     Host = proto_ws_utility:header_get_value('Host', Headers),

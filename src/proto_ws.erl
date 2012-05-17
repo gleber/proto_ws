@@ -167,7 +167,7 @@ check_headers(Headers, RequiredHeaders) ->
 -spec check_websockets(VsnSupported::[websocket_version()], Headers::http_headers()) -> false | {true, Vsn::websocket_version()}.
 check_websockets([], _Headers) -> false;
 check_websockets([Vsn|T], Headers) ->
-    ?LOG_DEBUG("testing for websocket protocol ~p", [Vsn]),
+    ?PWS_LOG_DEBUG("testing for websocket protocol ~p", [Vsn]),
     VsnMod = get_module_name_from_vsn(Vsn),
     case check_headers(Headers, VsnMod:required_headers()) of
         true -> {true, Vsn, VsnMod};
