@@ -251,8 +251,8 @@ i_handle_data(#wstate{buffer=ToParse} = State,  Acc0, WsCallback) ->
                                       State#wstate{buffer = Rest},
                                       Acc0, WsCallback) of
                         %% tail-call if there is stuff in the buffer still to parse
-                        NewState = #wstate{buffer = B} when is_binary(B), B =/= <<>> ->
-                            i_handle_data(NewState,  Acc0, WsCallback);
+                        {Acc2, continue, NewState = #wstate{buffer = B}} when is_binary(B), B =/= <<>> ->
+                            i_handle_data(NewState, Acc2, WsCallback);
                         Other ->
                             Other
                     end;
