@@ -25,3 +25,13 @@ Copyright (c) 2012 Livepress Inc. Based on work by:
 * and other contributors of Misultin
 
 This library is distributed under BSD license, as is Misultin.
+
+Roadmap
+=======
+
+0.9.0
+* Current version
+
+1.0.0
+* Add examples
+* Add code documentation
