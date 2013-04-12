@@ -36,7 +36,7 @@
 -vsn("0.9-dev").
 
 %% API
--export([handshake/1, handshake_continue/4, handle_data/4, format_send/2]).
+-export([handshake/1, handshake_continue/4, handle_data/3, format_send/2]).
 
 -export([required_headers/0]).
 
@@ -94,7 +94,7 @@ handshake_continue(CB, Acc0, Data,
                 <<>> ->
                     {Acc0, continue, Response, State#wstate{buffer = Rest, inited = true}};
                 _ ->
-                    handle_data(CB, Acc0, Rest, State#wstate{buffer = <<>>, inited = true})
+                    handle_data(CB, Acc0, State#wstate{buffer = Rest, inited = true})
             end;
         Buffer2 ->
             {Acc0, continue, <<>>, State#wstate{buffer = Buffer2, inited = false}}
@@ -105,15 +105,13 @@ handshake_continue(CB, Acc0, Data,
 %% ----------------------------------------------------------------------------------------------------------
 -spec handle_data(WsCallback::fun(),
                   Acc::term(),
-                  Data::binary(),
                   State::wstate()) ->
                          {term(), 'websocket_close'} |
                          {term(), 'websocket_close', binary()} |
                          {term(), 'continue', wstate()}  |
                          {term(), 'continue', binary(), wstate()}.
-handle_data(CB, Acc0, Data,
-            #wstate{buffer = Buffer} = State) ->
-    case i_handle_data(<<Buffer/binary, Data/binary>>, <<>>, Acc0, CB) of
+handle_data(CB, Acc0, #wstate{buffer = Buffer} = State) ->
+    case i_handle_data(Buffer, <<>>, Acc0, CB) of
         {Acc, continue, Buffer2} ->
             {Acc, continue, State#wstate{buffer = Buffer2}};
         {Acc, websocket_close, SendData} ->
