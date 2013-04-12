@@ -36,7 +36,7 @@
 -vsn("0.9-dev").
 
 %% API
--export([handshake/1, handshake_continue/4, handle_data/4, format_send/2]).
+-export([handshake/1, handshake_continue/4, handle_data/3, format_send/2]).
 
 -include("../include/proto_ws.hrl").
 
@@ -98,15 +98,13 @@ handshake_continue(_CB, _Acc0, _Data, _State) ->
 %% ----------------------------------------------------------------------------------------------------------
 -spec handle_data(WsCallback::fun(),
                   Acc::term(),
-                  Data::binary(),
                   State::wstate()) ->
                          {term(), 'websocket_close'} |
                          {term(), 'websocket_close', binary()} |
                          {term(), 'continue', wstate()}  |
                          {term(), 'continue', binary(), wstate()}.
-handle_data(WsCallback, Acc0, Data,
-            #wstate{buffer = Buffer} = State) ->
-    i_handle_data(State#wstate{buffer = <<Buffer/binary, Data/binary>>},  Acc0, WsCallback).
+handle_data(WsCallback, Acc0, #wstate{} = State) ->
+    i_handle_data(State,  Acc0, WsCallback).
 
 %% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback to format data before it is sent into the socket.
@@ -232,7 +230,7 @@ take_frame(Data) when is_binary(Data), size(Data) >= ?MAX_UNPARSED_BUFFER_SIZE -
 
 %% process incoming data
 -spec i_handle_data(#wstate{}, Acc::term(), WsCallback::fun()) -> {term(), continue, #wstate{}} | {term(), websocket_close, term()}.
-i_handle_data(#wstate{buffer=ToParse} = State,  Acc0, WsCallback) ->
+i_handle_data(#wstate{buffer=ToParse} = State, Acc0, WsCallback) ->
     case take_frame(ToParse) of
         {error, max_size_reached} ->
             ?PWS_LOG_DEBUG("reached max unparsed buffer size, aborting connection", []),

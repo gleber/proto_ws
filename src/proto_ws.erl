@@ -52,7 +52,6 @@
     {term(), 'continue', binary(), wstate()}.
 -callback handle_data(WsCallback::fun(),
                       Acc::term(),
-                      Data::binary(),
                       State::wstate()) ->
     {term(), 'websocket_close'} |
     {term(), 'websocket_close', binary()} |
@@ -120,10 +119,20 @@ format_send(Data, #wstate{vsnmod = VsnMod} = State) ->
                          {term(), 'websocket_close', binary()} |
                          {term(), 'continue', wstate()}  |
                          {term(), 'continue', binary(), wstate()}.
-handle_data(CB, Acc0, Data, #wstate{inited = false, vsnmod = VsnMod} = State) ->
-    VsnMod:handshake_continue(CB, Acc0, Data, State);
-handle_data(CB, Acc0, Data, #wstate{inited = true, vsnmod = VsnMod} = State) ->
-    VsnMod:handle_data(CB, Acc0, Data, State).
+handle_data(CB, Acc0, Data, #wstate{buffer = Buffer0} = State0) ->
+    Buffer = <<Buffer0/binary, Data/binary>>,
+    State = State0#wstate{buffer = Buffer},
+    case handle_data0(CB, Acc0, State) of
+        {Acc, continue, #wstate{buffer = B} = State2} = Ret when B /= Buffer ->
+            handle_data(CB, Acc, <<>>, State2);
+        Ret ->
+            Ret
+    end.
+
+handle_data0(CB, Acc0, #wstate{inited = false, vsnmod = VsnMod} = State) ->
+    VsnMod:handshake_continue(CB, Acc0, State);
+handle_data0(CB, Acc0, #wstate{inited = true, vsnmod = VsnMod} = State) ->
+    VsnMod:handle_data(CB, Acc0, State).
 
 %% Check if headers correspond to headers requirements.
 -spec check_headers(Headers::http_headers(), RequiredHeaders::http_headers()) -> true | http_headers().
