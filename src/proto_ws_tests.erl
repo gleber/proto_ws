@@ -1,5 +1,6 @@
 -module(proto_ws_tests).
 
+-ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
 empty_test() ->
@@ -86,6 +87,5 @@ parsing_test() ->
       _Pub3,
       _Pub4,
       _Force], websocket_close} = proto_ws:handle_data(WsCallback, [], iolist_to_binary(Data), WState).
-    
-    
-    
+
+-endif.
