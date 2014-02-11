@@ -145,6 +145,8 @@ check_headers(Headers, RequiredHeaders) ->
                         case Val of
                             ignore -> false; % ignore value -> ok, remove from list
                             HVal -> false;   % expected val -> ok, remove from list
+                            Val when is_list(Val) andalso is_list(hd(Val)) ->
+                                not(lists:member(HVal, Val));
                             _ ->
                                 %% check if header has multiple parameters (for instance FF7 websockets)
                                 not(lists:member(Val,string:tokens(HVal,", ")))
