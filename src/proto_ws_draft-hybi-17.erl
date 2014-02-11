@@ -48,7 +48,7 @@
 %% ============================ \/ API ======================================================================
 required_headers() ->
     [
-     {'Upgrade', "websocket"}, {'Connection', "Upgrade"}, {'Host', ignore},
+     {'Upgrade', ["websocket", "WebSocket"]}, {'Connection', "Upgrade"}, {'Host', ignore},
      {'Sec-Websocket-Key', ignore}, {'Sec-WebSocket-Version', "13"}
     ].
 
