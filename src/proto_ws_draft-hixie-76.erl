@@ -36,7 +36,7 @@
 -vsn("0.9-dev").
 
 %% API
--export([handshake/1, handshake_continue/4, handle_data/3, format_send/2]).
+-export([handshake/1, handshake_continue/3, handle_data/3, format_send/2]).
 
 -export([required_headers/0]).
 
@@ -62,11 +62,11 @@ handshake(State) ->
 %% ----------------------------------------------------------------------------------------------------------
 %% Description: Callback finalize handshake
 %% ----------------------------------------------------------------------------------------------------------
-handshake_continue(CB, Acc0, Data,
+handshake_continue(CB, Acc0,
                    #wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, headers = Headers, path = Path, origin = Origin, host = Host, buffer = Buffer} = State) ->
     Key1 = proto_ws_utility:header_get_value('Sec-WebSocket-Key1', Headers),
     Key2 = proto_ws_utility:header_get_value('Sec-WebSocket-Key2', Headers),
-    case <<Buffer/binary, Data/binary>> of
+    case <<Buffer/binary>> of
         <<Body:8/binary, Rest/binary>> ->
             WsMode = case SocketMode of
                          ssl -> "wss";
