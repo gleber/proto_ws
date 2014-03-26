@@ -44,7 +44,6 @@
 -callback handshake(#wstate{}) -> {'ok', iolist(), #wstate{}}.
 -callback handshake_continue(WsCallback::fun(),
                              Acc::term(),
-                             Data::binary(),
                              State::wstate()) ->
     {term(), 'websocket_close'} |
     {term(), 'websocket_close', binary()} |
@@ -167,7 +166,7 @@ check_headers(Headers, RequiredHeaders) ->
 %% behaviour_info(callbacks) ->
 %%     [
 %%      {handshake, 1},
-%%      {handshake_continue, 4},
+%%      {handshake_continue, 3},
 %%      {handle_data, 4},
 %%      {format_send, 2}
 %%     ];

@@ -36,7 +36,7 @@
 -vsn("0.9-dev").
 
 %% API
--export([handshake/1, handshake_continue/4, handle_data/3, format_send/2]).
+-export([handshake/1, handshake_continue/3, handle_data/3, format_send/2]).
 
 -export([required_headers/0]).
 
@@ -70,13 +70,12 @@ handshake(#wstate{socket_mode = SocketMode, force_ssl = WsForceSsl, origin = Ori
 
 -spec handshake_continue(WsCallback::fun(),
                          Acc::term(),
-                         Data::binary(),
                          State::wstate()) ->
                                 {term(), 'websocket_close'} |
                                 {term(), 'websocket_close', binary()} |
                                 {term(), 'continue', wstate()}  |
                                 {term(), 'continue', binary(), wstate()}.
-handshake_continue(_CB, _Acc0, _Data, _State) ->
+handshake_continue(_CB, _Acc0, _State) ->
     erlang:error(should_not_happen).
 
 %% ----------------------------------------------------------------------------------------------------------
